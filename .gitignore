@@ -1,1 +1,4 @@
 .vscode/
+dnsrelay.log
+test.c
+*.exe
