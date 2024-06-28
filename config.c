@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static char upstream_dns_ip[16];
+static char dns_db_file[256];
 static int cache_size = 100;  // 默认缓存大小
 static char log_level[10] = "info";  // 默认日志级别
 static int server_port = 8053;  // 默认端口
@@ -17,11 +17,11 @@ void config_load(const char* filename) {
 
     char buffer[256];
     while (fgets(buffer, sizeof(buffer), file)) {
-        if (strncmp(buffer, "upstream_dns_ip=", 16) == 0) {
-            strncpy(upstream_dns_ip, buffer + 16, sizeof(upstream_dns_ip) - 1);
-            upstream_dns_ip[sizeof(upstream_dns_ip) - 1] = '\0';
+        if (strncmp(buffer, "dns_db_file=", 12) == 0) {
+            strncpy(dns_db_file, buffer + 12, sizeof(dns_db_file) - 1);
+            dns_db_file[sizeof(dns_db_file) - 1] = '\0';
             // 去掉末尾的换行符
-            char* newline = strchr(upstream_dns_ip, '\n');
+            char* newline = strchr(dns_db_file, '\n');
             if (newline) {
                 *newline = '\0';
             }
@@ -43,8 +43,8 @@ void config_load(const char* filename) {
     fclose(file);
 }
 
-const char* config_get_upstream_dns_ip() {
-    return upstream_dns_ip;
+const char* config_get_dns_db_file() {
+    return dns_db_file;
 }
 
 int config_get_cache_size() {
