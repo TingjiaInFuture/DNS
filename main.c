@@ -9,9 +9,16 @@ int main(int argc, char *argv[]) {
     log_init();
 
     // 加载配置
-    if (load_config("dnsrelay.conf") != 0) {
-        log_error("Failed to load configuration.");
-        return EXIT_FAILURE;
+   Config config;
+
+    if (load_config("dnsrelay.txt", &config) != 0) {
+        fprintf(stderr, "Failed to load configuration file.\n");
+        return 1;
+    }
+
+    printf("Loaded %d DNS records:\n", config.record_count);
+    for (int i = 0; i < config.record_count; i++) {
+        printf("%s -> %s\n", config.records[i].domain, config.records[i].ip);
     }
 
     // 启动线程池

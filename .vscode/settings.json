@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "java": "cd $dir && javac -d. $fileName && java app.$fileNameWithoutExt",
+        "stdio.h": "c",
+        "stdlib.h": "c",
+        "config.h": "c"
+    }
+}
