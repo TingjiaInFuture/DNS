@@ -1,3 +1,4 @@
+#include "platform.h" // multiplatform socket initialization
 #include "dns_query.h"
 #include "config.h"
 #include "cache.h"
@@ -5,13 +6,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
 
 int main() {
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        log_error("WSAStartup failed");
+    if (!socket_init()) {
+        log_error("Socket initialization failed");
         return 1;
     }
 
@@ -20,7 +18,7 @@ int main() {
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) {
         log_error("Failed to create socket");
-        WSACleanup();
+        socket_cleanup();
         return 1;
     }
 
@@ -33,11 +31,11 @@ int main() {
     if (bind(sock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
         log_error("Bind failed");
         closesocket(sock);
-        WSACleanup();
+        socket_cleanup();
         return 1;
     }
 
-    while (1) {
+        while (1) {
         char buffer[512];
         struct sockaddr_in clientAddr;
         int clientAddrLen = sizeof(clientAddr);
@@ -64,7 +62,7 @@ int main() {
     }
 
     closesocket(sock);
-    WSACleanup();
+    socket_cleanup();
     dns_query_cleanup();
     return 0;
 }
