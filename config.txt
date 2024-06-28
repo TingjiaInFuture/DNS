@@ -1,0 +1,13 @@
+# 配置文件: config.txt (！！格式示例！勿动！)
+
+# 上游 DNS 服务器的 IP 地址
+upstream_dns_ip=8.8.8.8
+
+# 缓存大小限制 (可选)
+cache_size=100
+
+# 日志级别 (可选)
+log_level=debug
+
+# DNS 服务器监听的端口 (可选)
+server_port=8053

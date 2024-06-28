@@ -1,33 +1,60 @@
+#include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "config.h"
 
-// 实现加载配置文件的函数
-int load_config(const char *filename, Config *config) {
-    FILE *file = fopen(filename, "r");
+static char upstream_dns_ip[16];
+static int cache_size = 100;  // 默认缓存大小
+static char log_level[10] = "info";  // 默认日志级别
+static int server_port = 8053;  // 默认端口
+
+void config_load(const char* filename) {
+    FILE* file = fopen(filename, "r");
     if (file == NULL) {
-        // 打开配置文件失败，返回-1
-        return -1;
+        perror("Failed to open config file");
+        exit(EXIT_FAILURE);
     }
 
-    char line[256];
-    config->record_count = 0;
-
-    // 逐行读取配置文件
-    while (fgets(line, sizeof(line), file)) {
-        if (config->record_count >= MAX_ENTRIES) {
-            // 超过最大记录数限制
-            break;
-        }
-
-        // 解析每行中的IP地址和域名
-        if (sscanf(line, "%15s %255s", config->records[config->record_count].ip, config->records[config->record_count].domain) == 2) {
-            config->record_count++;
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), file)) {
+        if (strncmp(buffer, "upstream_dns_ip=", 16) == 0) {
+            strncpy(upstream_dns_ip, buffer + 16, sizeof(upstream_dns_ip) - 1);
+            upstream_dns_ip[sizeof(upstream_dns_ip) - 1] = '\0';
+            // 去掉末尾的换行符
+            char* newline = strchr(upstream_dns_ip, '\n');
+            if (newline) {
+                *newline = '\0';
+            }
+        } else if (strncmp(buffer, "cache_size=", 11) == 0) {
+            cache_size = atoi(buffer + 11);
+        } else if (strncmp(buffer, "log_level=", 10) == 0) {
+            strncpy(log_level, buffer + 10, sizeof(log_level) - 1);
+            log_level[sizeof(log_level) - 1] = '\0';
+            // 去掉末尾的换行符
+            char* newline = strchr(log_level, '\n');
+            if (newline) {
+                *newline = '\0';
+            }
+        } else if (strncmp(buffer, "server_port=", 12) == 0) {
+            server_port = atoi(buffer + 12);
         }
     }
 
-    // 关闭配置文件
     fclose(file);
-    return 0;
+}
+
+const char* config_get_upstream_dns_ip() {
+    return upstream_dns_ip;
+}
+
+int config_get_cache_size() {
+    return cache_size;
+}
+
+const char* config_get_log_level() {
+    return log_level;
+}
+
+int config_get_server_port() {
+    return server_port;
 }
