@@ -3,9 +3,29 @@
 #include "config.h"
 #include "cache.h"
 #include "log.h"
+#include "thread_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+void handle_dns_request(void *arg) {
+    char *buffer = (char *)arg;
+    char domain[256];
+    if (!parse_dns_request(buffer, domain)) {
+        log_error("Failed to parse DNS request");
+        return;
+    }
+
+    char ip[16];
+    if (lookup_domain_in_db(domain, ip)) {
+        cache_insert(domain, ip);
+        send_dns_response(buffer, ip);
+    } else {
+        log_error("Domain not found: %s", domain);
+    }
+
+    free(buffer);
+}
 
 int main() {
     if (!socket_init()) {
@@ -14,6 +34,7 @@ int main() {
     }
 
     dns_query_init("config.txt");
+    thread_manager_init(4);
 
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) {
@@ -35,34 +56,24 @@ int main() {
         return 1;
     }
 
-        while (1) {
-        char buffer[512];
+    while (1) {
+        char *buffer = (char *)malloc(512);
         struct sockaddr_in clientAddr;
         int clientAddrLen = sizeof(clientAddr);
 
-        int recvLen = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
+        int recvLen = recvfrom(sock, buffer, 512, 0, (struct sockaddr*)&clientAddr, &clientAddrLen);
         if (recvLen == SOCKET_ERROR) {
             log_error("recvfrom() failed");
+            free(buffer);
             continue;
         }
 
-        char domain[256];
-        if (!parse_dns_request(buffer, domain)) {
-            log_error("Failed to parse DNS request");
-            continue;
-        }
-
-        char ip[16];
-        if (lookup_domain_in_db(domain, ip)) {
-            cache_insert(domain, ip);
-            send_dns_response(sock, (struct sockaddr*)&clientAddr, clientAddrLen, buffer, ip);
-        } else {
-            log_error("Domain not found: %s", domain);
-        }
+        thread_manager_add_task(handle_dns_request, buffer);
     }
 
     closesocket(sock);
     socket_cleanup();
     dns_query_cleanup();
+    thread_manager_destroy();
     return 0;
 }
