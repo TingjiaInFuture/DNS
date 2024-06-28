@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include "dns_query.h"
 #include "config.h"
 #include "cache.h"

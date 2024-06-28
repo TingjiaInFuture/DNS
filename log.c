@@ -1,4 +1,6 @@
 // log.c
+#define _CRT_SECURE_NO_WARNINGS
+
 #include "log.h"
 #include <stdio.h>
 #include <stdarg.h>
