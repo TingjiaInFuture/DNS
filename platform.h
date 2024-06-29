@@ -8,6 +8,10 @@
 
 unsigned socket_init();
 void socket_cleanup();
+SOCKET create_udp_socket();
+struct sockaddr_in create_server_address(const char* ip, int port);
+int send_dns_query(SOCKET sockfd, const struct sockaddr_in* servaddr, const char* request);
+int receive_dns_response(SOCKET sockfd, char* response);
 
 #else
 #include <sys/socket.h>
@@ -22,6 +26,10 @@ void socket_cleanup();
 
 #define socket_init() // 在 Linux 上，这个宏为空
 #define socket_cleanup()
+#define create_udp_socket()
+#define create_server_address()
+#define send_dns_query()
+#define receive_dns_response()
 #endif
 
 #endif // PLATFORM_H

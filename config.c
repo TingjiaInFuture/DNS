@@ -9,6 +9,7 @@ static char dns_db_file[256];
 static int cache_size = 100;  // 默认缓存大小
 static char log_level[10] = "info";  // 默认日志级别
 static int server_port = 8053;  // 默认端口
+static char external_dns_server[16] = "10.3.9.6"; // 默认外部DNS服务器
 
 void config_load(const char* filename) {
     FILE* file = fopen(filename, "r");
@@ -40,6 +41,15 @@ void config_load(const char* filename) {
         } else if (strncmp(buffer, "server_port=", 12) == 0) {
             server_port = atoi(buffer + 12);
         }
+        else if (strncmp(buffer, "external_dns_server=", 20) == 0) {
+            strncpy(external_dns_server, buffer + 20, sizeof(external_dns_server) - 1);
+            external_dns_server[sizeof(external_dns_server) - 1] = '\0';
+            // 去掉末尾的换行符
+            char* newline = strchr(external_dns_server, '\n');
+            if (newline) {
+                *newline = '\0';
+            }
+        }
     }
 
     fclose(file);
@@ -59,4 +69,8 @@ const char* config_get_log_level() {
 
 int config_get_server_port() {
     return server_port;
+}
+
+const char* config_get_external_dns_server() {
+    return external_dns_server;
 }

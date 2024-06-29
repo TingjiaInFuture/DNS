@@ -3,6 +3,7 @@
 #include "dns_query.h"
 #include "config.h"
 #include "cache.h"
+#include "platform.h"
 #include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +47,9 @@ int lookup_domain_in_db(const char* domain, char* ip) {
             if (strcmp(domain, file_domain) == 0) {
                 strcpy(ip, file_ip);
                 fclose(file);
+                if (strcmp(ip, "0.0.0.0") == 0) {
+                    return -1;  // 域名不存在
+                }
                 return 1;
             }
         }
@@ -64,6 +68,7 @@ void dns_query_handle_request() {
     char request[256];
     char domain[256];
     char ip[16];
+    int lookup_result;
 
     // 读取请求（简单模拟）
     printf("Enter domain to query: ");
@@ -82,13 +87,44 @@ void dns_query_handle_request() {
         send_dns_response(domain, cached_ip);
         return;
     }
-
     // 查找数据库
-    if (lookup_domain_in_db(domain, ip)) {
-        log_debug("DB hit for domain %s", domain);
-        cache_insert(domain, ip);
-        send_dns_response(domain, ip);
-    } else {
+    lookup_result = lookup_domain_in_db(domain, ip);
+    if (lookup_result == -1) {
         log_error("Domain not found: %s", domain);
     }
+    else if (lookup_result == 1) {
+        log_debug("DB hit for domain %s", domain);
+        cache_insert(domain, ip);
+    }
+    else { // 发送外部请求
+        const char* external_dns_server = config_get_external_dns_server();
+        char external_dns_ip[16];
+        struct in_addr* response_ip;
+        SOCKET sockfd = create_udp_socket();
+        if (sockfd == INVALID_SOCKET) {
+            printf("%d",WSAGetLastError());
+            return;
+        }
+        struct sockaddr_in servaddr = create_server_address(external_dns_server, 53);
+        if (!send_dns_query(sockfd, &servaddr, domain)) {
+            closesocket(sockfd);
+            return;
+        }
+        if (!receive_dns_response(sockfd, external_dns_ip)) {
+            closesocket(sockfd);
+            return;
+        }
+        response_ip = external_dns_ip;
+        strcpy(external_dns_ip, inet_ntoa(*response_ip));  // 将二进制的IP地址转换为字符串，仅用于printf
+        printf("External get IP: %s\n", external_dns_ip);
+        closesocket(sockfd);
+        socket_cleanup();
+    }
+    //if (lookup_domain_in_db(domain, ip)) {
+    //    log_debug("DB hit for domain %s", domain);
+    //    cache_insert(domain, ip);
+    //    send_dns_response(domain, ip);
+    //} else {
+    //    log_error("Domain not found: %s", domain);
+    //}
 }

@@ -11,3 +11,6 @@ server_port=8053
 
 # DNS 数据库文件路径
 dns_db_file=dns_db.txt
+
+# 外部DNS服务器的地址
+external_dns_server=10.3.9.6
