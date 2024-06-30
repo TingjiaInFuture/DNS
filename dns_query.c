@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_WARNINGS
+﻿#define _CRT_SECURE_NO_WARNINGS
 
 #include "dns_query.h"
 #include "config.h"
@@ -96,27 +96,31 @@ void dns_query_handle_request() {
         log_debug("DB hit for domain %s", domain);
         cache_insert(domain, ip);
     }
-    else { // 发送外部请求
+    else { // 发送外部请求，socket暂时在这里建立
         const char* external_dns_server = config_get_external_dns_server();
         char external_dns_ip[16];
-        struct in_addr* response_ip;
+        char request_datagram[512];
+        struct in_addr* response_ip = (struct in_addr*)malloc(sizeof(struct in_addr));
         SOCKET sockfd = create_udp_socket();
         if (sockfd == INVALID_SOCKET) {
-            printf("%d",WSAGetLastError());
+            //printf("%d",WSAGetLastError());
             return;
         }
         struct sockaddr_in servaddr = create_server_address(external_dns_server, 53);
-        if (!send_dns_query(sockfd, &servaddr, domain)) {
+        int request_len;
+        build_dns_query(domain, request_datagram, &request_len);
+        if (!send_dns_query(sockfd, &servaddr, request_datagram, request_len)) {
             closesocket(sockfd);
             return;
         }
-        if (!receive_dns_response(sockfd, external_dns_ip)) {
+        if (!receive_dns_response(sockfd, response_ip)) {
             closesocket(sockfd);
             return;
         }
         response_ip = external_dns_ip;
         strcpy(external_dns_ip, inet_ntoa(*response_ip));  // 将二进制的IP地址转换为字符串，仅用于printf
         printf("External get IP: %s\n", external_dns_ip);
+        free(response_ip);
         closesocket(sockfd);
         socket_cleanup();
     }
