@@ -7,10 +7,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include "platform.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
-// 配置文件读取函数的声明
-const char* config_get_external_dns_server();
+// 链接Winsock库
+#pragma comment(lib, "ws2_32.lib")
 
 // DNS 报头结构体
 typedef struct {
@@ -28,10 +29,6 @@ typedef struct {
     uint16_t qclass;  // 查询类
 } DNSQuestion;
 
-// 设置16位整数的字节顺序（大端）
-uint16_t htons(uint16_t val) {
-    return (val << 8) | (val >> 8);
-}
 
 // 构建DNS查询报文
 void build_dns_query(const char* domain, char* query) {
@@ -71,6 +68,8 @@ void build_dns_query(const char* domain, char* query) {
     question->qclass = htons(0x0001); // 查询类IN
 }
 
+// 配置文件读取函数的声明
+const char* config_get_external_dns_server();
 
 int send_dns_query(const char* query, size_t query_len, char* response, size_t response_len) {
     const char* external_dns_server = config_get_external_dns_server();
@@ -79,13 +78,21 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
+    // 初始化Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        fprintf(stderr, "WSAStartup failed\n");
+        return -1;
+    }
+
     // 套接字相关变量
-    int sockfd;
+    SOCKET sockfd;
     struct sockaddr_in server_addr;
 
     // 创建UDP套接字
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("socket creation failed");
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
+        fprintf(stderr, "Socket creation failed\n");
+        WSACleanup();
         return -1;
     }
 
@@ -96,30 +103,34 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
 
     // 将IP地址从点分十进制转换为二进制格式
     if (inet_pton(AF_INET, external_dns_server, &server_addr.sin_addr) <= 0) {
-        perror("inet_pton failed");
-        close(sockfd);
+        fprintf(stderr, "inet_pton failed\n");
+        closesocket(sockfd);
+        WSACleanup();
         return -1;
     }
 
     // 发送DNS查询请求
-    if (sendto(sockfd, query, query_len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("sendto failed");
-        close(sockfd);
+    if (sendto(sockfd, query, query_len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+        fprintf(stderr, "sendto failed\n");
+        closesocket(sockfd);
+        WSACleanup();
         return -1;
     }
 
     // 接收DNS响应
     struct sockaddr_in from_addr;
-    socklen_t from_len = sizeof(from_addr);
+    int from_len = sizeof(from_addr);
     int n = recvfrom(sockfd, response, response_len, 0, (struct sockaddr*)&from_addr, &from_len);
-    if (n < 0) {
-        perror("recvfrom failed");
-        close(sockfd);
+    if (n == SOCKET_ERROR) {
+        fprintf(stderr, "recvfrom failed\n");
+        closesocket(sockfd);
+        WSACleanup();
         return -1;
     }
 
     // 关闭套接字
-    close(sockfd);
+    closesocket(sockfd);
+    WSACleanup();
     return n;
 }
 
@@ -183,7 +194,6 @@ int parse_dns_respond(const char* respond, char* ip) {
     return 0; // 没有找到A记录
 }
 
-
 // 测试代码
 int main() {
     char query[256];
@@ -204,15 +214,15 @@ int main() {
     } else {
         printf("Failed to receive DNS response\n");
     }
-
     if (parse_dns_respond(response, ip)) {
         printf("Parsed IP: %s\n", ip);
     } else {
         printf("Failed to parse DNS response\n");
     }
-
     return 0;
 }
+
+
 
 
 
