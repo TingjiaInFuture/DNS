@@ -275,7 +275,24 @@ void dns_query_handle_request(void* arg) {
     else if (lookup_result == -1) {  // 找到IP地址为0.0.0.0，表示域名不存在
         send_dns_response(buffer, "0.0.0.0"); 
     }
-    else {  //todo!
+    else {  
+        log_debug("Cache miss for domain %s", domain);
+        build_dns_query(domain, buffer);  // 构建DNS查询报文
+        int query_len = sizeof(DNSHeader) + strlen(domain) + 2 + sizeof(DNSQuestion);
+        char response[512];
+        int response_len = send_dns_query(buffer, query_len, response, sizeof(response));  // 发送DNS查询并接收响应
+        if (response_len == -1) {
+            log_error("Failed to send DNS query");
+            free(buffer);
+            return;
+        }
+        
+        if (parse_dns_respond(response, ip)) {  // 解析DNS响应
+            cache_insert(domain, ip);  // 将结果插入缓存
+            send_dns_response(buffer, ip);  // 发送DNS响应
+        } else {
+            log_error("Failed to parse DNS response");
+        }
 
 
     }
