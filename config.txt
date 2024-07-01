@@ -7,7 +7,7 @@ cache_size=100
 log_level=debug
 
 # DNS 服务器监听的端口 (模拟)
-server_port=8053
+server_port=53
 
 # DNS 数据库文件路径
 dns_db_file=dns_db.txt

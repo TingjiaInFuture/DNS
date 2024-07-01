@@ -8,7 +8,7 @@
 static char dns_db_file[256];
 static int cache_size = 100;  // 默认缓存大小
 static char log_level[10] = "info";  // 默认日志级别
-static int server_port = 8053;  // 默认端口
+static int server_port = 53;  // 默认端口
 static char external_dns_server[16] = "10.3.9.5"; // 默认外部DNS服务器
 
 void config_load(const char* filename) {
