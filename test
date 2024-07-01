@@ -128,17 +128,72 @@ const char* config_get_external_dns_server() {
     // 在实际应用中，此函数应读取配置文件或其他配置来源
     return "8.8.8.8"; // 示例：使用Google的公共DNS服务器
 }
+// 解析DNS响应
+int parse_dns_respond(const char* respond, char* ip) {
+    // 解析报头
+    DNSHeader *header = (DNSHeader *)respond;
+    uint16_t ancount = ntohs(header->ancount);
+
+    // 跳过报头和问题部分
+    const char *ptr = respond + sizeof(DNSHeader);
+
+    // 跳过QNAME
+    while (*ptr != 0) {
+        ptr += *ptr + 1;
+    }
+    ptr += 1; // 跳过QNAME的结尾0字节
+
+    // 跳过QTYPE和QCLASS
+    ptr += 4;
+
+    // 解析回答部分
+    for (int i = 0; i < ancount; i++) {
+        // 跳过NAME
+        if ((*ptr & 0xC0) == 0xC0) {
+            ptr += 2; // 压缩域名
+        } else {
+            while (*ptr != 0) {
+                ptr += *ptr + 1;
+            }
+            ptr += 1; // 跳过NAME的结尾0字节
+        }
+
+        // 解析TYPE和CLASS
+        uint16_t type = ntohs(*(uint16_t *)ptr);
+        uint16_t class = ntohs(*(uint16_t *)(ptr + 2));
+        ptr += 4;
+
+        // 跳过TTL
+        ptr += 4;
+
+        // 解析RDLENGTH
+        uint16_t rdlength = ntohs(*(uint16_t *)ptr);
+        ptr += 2;
+
+        // 解析RDATA
+        if (type == 1 && class == 1 && rdlength == 4) { // A记录
+            sprintf(ip, "%u.%u.%u.%u", (unsigned char)ptr[0], (unsigned char)ptr[1], (unsigned char)ptr[2], (unsigned char)ptr[3]);
+            return 1;
+        }
+
+        // 跳过当前记录的RDATA
+        ptr += rdlength;
+    }
+
+    return 0; // 没有找到A记录
+}
+
 
 // 测试代码
 int main() {
     char query[256];
     char response[512];
-
+    char ip[16];
     // 构建DNS查询报文
-    build_dns_query("example.com", query);
+    build_dns_query("baidu.com", query);
 
     // 发送DNS查询并接收响应
-    int response_len = send_dns_query(query, sizeof(DNSHeader) + strlen("example.com") + 2 + sizeof(DNSQuestion), response, sizeof(response));
+    int response_len = send_dns_query(query, sizeof(DNSHeader) + strlen("baidu.com") + 2 + sizeof(DNSQuestion), response, sizeof(response));
 
     if (response_len > 0) {
         printf("Received DNS response (%d bytes):\n", response_len);
@@ -148,6 +203,12 @@ int main() {
         printf("\n");
     } else {
         printf("Failed to receive DNS response\n");
+    }
+
+    if (parse_dns_respond(response, ip)) {
+        printf("Parsed IP: %s\n", ip);
+    } else {
+        printf("Failed to parse DNS response\n");
     }
 
     return 0;
