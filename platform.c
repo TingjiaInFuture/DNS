@@ -1,6 +1,9 @@
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
 #include "platform.h"
 #include "log.h"
 #include <WinSock2.h>
+#include <stdio.h>
 
 #ifdef _WIN32
 
@@ -92,6 +95,26 @@ int send_dns_query(SOCKET sockfd, const struct sockaddr_in* servaddr, const char
 //}
 // 解析DNS响应报文
 int receive_dns_response(SOCKET sockfd, struct in_addr* response_ip) {
+    //增加超时处理
+    fd_set readfds;
+    struct timeval timeout;
+
+    FD_ZERO(&readfds);
+    FD_SET(sockfd, &readfds);
+
+    timeout.tv_sec = 2000 / 1000;//2秒
+    timeout.tv_usec = (2000 % 1000) * 1000;
+
+    int result = select(0, &readfds, NULL, NULL, &timeout);
+    if (result == SOCKET_ERROR) {
+        log_error("select() failed");
+        return 0;
+    }
+    else if (result == 0) {
+        log_error("receive_dns_response() timed out");
+        return 0;
+    }
+
     char response[512];
     int numbytes = recvfrom(sockfd, response, sizeof(response) - 1, 0, NULL, NULL);
     if (numbytes == SOCKET_ERROR) {

@@ -1,4 +1,5 @@
 ﻿#define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "dns_query.h"
 #include "config.h"
@@ -20,6 +21,7 @@ void dns_query_init(const char* config_file) {
     }
     strncpy(dns_db_file, db_file, sizeof(dns_db_file) - 1);
     dns_db_file[sizeof(dns_db_file) - 1] = '\0';
+    log_debug("DNS DB file: %s", dns_db_file);
 }
 
 void dns_query_cleanup() {
@@ -29,6 +31,7 @@ void dns_query_cleanup() {
 int parse_dns_request(const char* request, char* domain) {
     // 解析 DNS 请求（简单模拟）
     strcpy(domain, request);
+    log_debug("Parsed domain: %s", domain);
     return 1;
 }
 
@@ -36,6 +39,7 @@ int lookup_domain_in_db(const char* domain, char* ip) {
     FILE* file = fopen(dns_db_file, "r");
     if (file == NULL) {
         perror("Failed to open DNS DB file");
+        log_error("Failed to open DNS DB file: %s", dns_db_file);
         return 0;
     }
 
@@ -43,7 +47,9 @@ int lookup_domain_in_db(const char* domain, char* ip) {
     while (fgets(line, sizeof(line), file)) {
         char file_domain[256];
         char file_ip[16];
+        log_debug("Read line: %s", line);
         if (sscanf(line, "%255s %15s", file_domain, file_ip) == 2) {
+            log_debug("Parsed domain: %s, IP: %s", file_domain, file_ip);
             if (strcmp(domain, file_domain) == 0) {
                 strcpy(ip, file_ip);
                 fclose(file);
@@ -56,79 +62,74 @@ int lookup_domain_in_db(const char* domain, char* ip) {
     }
 
     fclose(file);
+    log_debug("Domain not found in DB: %s", domain);
     return 0;
 }
 
-void send_dns_response(const char* domain, const char* ip) {
+
+void send_dns_response(const char* buffer, const char* ip) {
     // 发送 DNS 响应（简单模拟）
-    printf("Domain: %s, IP: %s\n", domain, ip);
+    log_debug("Sending DNS response: %s -> %s", buffer, ip);
+    printf("Domain: %s, IP: %s\n", buffer, ip);
 }
 
-void dns_query_handle_request() {
-    char request[256];
+void dns_query_handle_request(void* arg) {
+    char* buffer = (char*)arg;  // 从参数获取DNS请求数据
     char domain[256];
-    char ip[16];
-    int lookup_result;
-
-    // 读取请求（简单模拟）
-    printf("Enter domain to query: ");
-    scanf("%255s", request);
-
-    // 解析请求
-    if (!parse_dns_request(request, domain)) {
+    if (!parse_dns_request(buffer, domain)) {  // 解析DNS请求，提取域名
         log_error("Failed to parse DNS request");
+        free(buffer);  // 解析失败，释放内存
         return;
     }
 
-    // 查找缓存
+    char ip[16];
     const char* cached_ip = cache_lookup(domain);
     if (cached_ip) {
         log_debug("Cache hit for domain %s", domain);
-        send_dns_response(domain, cached_ip);
+        send_dns_response(buffer, cached_ip);
+        free(buffer);
         return;
     }
-    // 查找数据库
-    lookup_result = lookup_domain_in_db(domain, ip);
-    if (lookup_result == -1) {
+
+    int lookup_result = lookup_domain_in_db(domain, ip);  // 在本地数据库中查找域名对应的IP地址
+    if (lookup_result == 1) {  // 找到普通IP地址
+        cache_insert(domain, ip);  // 将结果插入缓存
+        send_dns_response(buffer, ip);  // 发送DNS响应
+    }
+    else if (lookup_result == -1) {  // 找到IP地址为0.0.0.0，表示域名不存在
         log_error("Domain not found: %s", domain);
+        send_dns_response(buffer, "0.0.0.0"); 
     }
-    else if (lookup_result == 1) {
-        log_debug("DB hit for domain %s", domain);
-        cache_insert(domain, ip);
-    }
-    else { // 发送外部请求，socket暂时在这里建立
+    else {  
+        // 发送外部DNS查询请求
         const char* external_dns_server = config_get_external_dns_server();
-        char external_dns_ip[16];
         char request_datagram[512];
-        struct in_addr* response_ip = (struct in_addr*)malloc(sizeof(struct in_addr));
+        struct in_addr response_ip;
         SOCKET sockfd = create_udp_socket();
         if (sockfd == INVALID_SOCKET) {
-            //printf("%d",WSAGetLastError());
+            free(buffer);  // 创建套接字失败，释放内存
             return;
         }
         struct sockaddr_in servaddr = create_server_address(external_dns_server, 53);
         int request_len;
-        build_dns_query(domain, request_datagram, &request_len);
+        build_dns_query(domain, request_datagram, &request_len);  // 构建DNS查询报文
         if (!send_dns_query(sockfd, &servaddr, request_datagram, request_len)) {
-            closesocket(sockfd);
+            closesocket(sockfd);  // 发送查询失败，关闭套接字
+            free(buffer);  
             return;
         }
-        if (!receive_dns_response(sockfd, response_ip)) {
-            closesocket(sockfd);
+        if (!receive_dns_response(sockfd, &response_ip)) {  // 接收DNS响应，超时设置为2000毫秒
+            log_error("Failed to receive response for domain: %s", domain);
+            closesocket(sockfd); 
+            free(buffer);  
             return;
         }
-        response_ip = external_dns_ip;
-        strcpy(external_dns_ip, inet_ntoa(*response_ip));  // 将二进制的IP地址转换为字符串，仅用于printf
-        printf("External get IP: %s\n", external_dns_ip);
-        free(response_ip);
-        closesocket(sockfd);
-        socket_cleanup();
+        char external_dns_ip[16];
+        strcpy(external_dns_ip, inet_ntoa(response_ip));  // 将二进制的IP地址转换为字符串
+        cache_insert(domain, external_dns_ip);  // 将外部查询结果插入缓存
+        send_dns_response(buffer, external_dns_ip);  // 发送DNS响应
+        closesocket(sockfd);  // 关闭套接字
     }
-    //if (lookup_domain_in_db(domain, ip)) {
-    //    log_debug("DB hit for domain %s", domain);
-    //    cache_insert(domain, ip);
-    //    send_dns_response(domain, ip);
-    //} else {
-    //    log_error("Domain not found: %s", domain);
-    //}
+
+    free(buffer); 
 }

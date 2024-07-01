@@ -8,33 +8,28 @@
 #include <stdlib.h>
 #include <string.h>
 
-void handle_dns_request(void *arg) {
-    char *buffer = (char *)arg;
-    char domain[256];
-    if (!parse_dns_request(buffer, domain)) {
-        log_error("Failed to parse DNS request");
-        return;
-    }
-
-    char ip[16];
-    if (lookup_domain_in_db(domain, ip)) {
-        cache_insert(domain, ip);
-        send_dns_response(buffer, ip);
-    } else {
-        log_error("Domain not found: %s", domain);
-    }
-
-    free(buffer);
-}
-
 int main() {
+    // 初始化日志
+    log_init();
+
+    // 加载配置文件
+    config_load("config.txt");
+
+    // 初始化缓存
+    int cache_size = config_get_cache_size();
+    cache_init(cache_size);
+
+    // 初始化线程池
+    int num_threads = 4;  // 根据需求调整线程数量
+    thread_manager_init(num_threads);
+
+    // 初始化套接字
     if (!socket_init()) {
         log_error("Socket initialization failed");
         return 1;
     }
 
     dns_query_init("config.txt");
-    thread_manager_init(4);
 
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) {
@@ -47,7 +42,7 @@ int main() {
     memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
-    serverAddr.sin_port = htons(53);
+    serverAddr.sin_port = htons(config_get_server_port());
 
     if (bind(sock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
         log_error("Bind failed");
@@ -56,8 +51,10 @@ int main() {
         return 1;
     }
 
+    log_debug("Server started on port %d", config_get_server_port());
+
     while (1) {
-        char *buffer = (char *)malloc(512);
+        char* buffer = (char*)malloc(512);
         struct sockaddr_in clientAddr;
         int clientAddrLen = sizeof(clientAddr);
 
@@ -68,12 +65,15 @@ int main() {
             continue;
         }
 
-        thread_manager_add_task(handle_dns_request, buffer);
+        log_debug("Received request from client");
+
+        thread_manager_add_task(dns_query_handle_request, buffer);
     }
 
     closesocket(sock);
     socket_cleanup();
     dns_query_cleanup();
     thread_manager_destroy();
+    log_close();
     return 0;
 }
