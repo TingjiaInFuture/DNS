@@ -4,20 +4,9 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
-unsigned socket_init() {
-    WSADATA wsaData;
-    // 初始化 Winsock
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-       log_error("WSAStartup failed");
-       return 0;
-    }
-    return 1;
-}
+unsigned socket_init();
 
-void socket_cleanup() {
-    // 清理 Winsock
-    WSACleanup();
-}
+void socket_cleanup();
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>

@@ -18,15 +18,16 @@ typedef struct {
 } DNSQuestion;
 
 // 设置16位整数的字节顺序（大端）
-uint16_t htons(uint16_t val) {
-    return (val << 8) | (val >> 8);
-}
+uint16_t htons_new(uint16_t val);
 
 void dns_query_init(const char* config_file);
 void dns_query_cleanup();
-void dns_query_handle_request();
+void build_dns_query(const char* domain, char* query);
 int parse_dns_request(const char* request, char* domain);
+int parse_dns_respond(const char* respond, char* ip);
 int lookup_domain_in_db(const char* domain, char* ip);
-void send_dns_response(const char* domain, const char* ip);
+int send_dns_query(const char* query, size_t query_len, char* response, size_t response_len);
+void send_dns_response(const char* buffer, const char* ip);
+void dns_query_handle_request(void* arg);
 
 #endif // DNS_QUERY_H

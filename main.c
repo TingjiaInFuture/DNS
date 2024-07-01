@@ -42,7 +42,7 @@ int main() {
     memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
-    serverAddr.sin_port = htons(config_get_server_port());
+    serverAddr.sin_port = htons_new(config_get_server_port());
 
     if (bind(sock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
         log_error("Bind failed");

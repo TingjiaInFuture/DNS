@@ -12,6 +12,10 @@
 
 static char dns_db_file[256];
 
+uint16_t htons_new(uint16_t val) {
+    return (val << 8) | (val >> 8);
+}
+
 void dns_query_init(const char* config_file) {
     config_load(config_file);  // 加载配置文件
     const char* db_file = config_get_dns_db_file();
@@ -35,9 +39,9 @@ void build_dns_query(const char* domain, char* query) {
     
     // 初始化报头
     DNSHeader *header = (DNSHeader *)query;
-    header->id = htons(0x1234);       // 设置事务ID
-    header->flags = htons(0x0100);    // 设置标志位（递归查询）
-    header->qdcount = htons(1);       // 设置问题数为1
+    header->id = htons_new(0x1234);       // 设置事务ID
+    header->flags = htons_new(0x0100);    // 设置标志位（递归查询）
+    header->qdcount = htons_new(1);       // 设置问题数为1
     header->ancount = 0;              // 设置回答数为0
     header->nscount = 0;              // 设置授权数为0
     header->arcount = 0;              // 设置附加数为0
@@ -62,8 +66,8 @@ void build_dns_query(const char* domain, char* query) {
 
     // 设置查询部分
     DNSQuestion *question = (DNSQuestion *)qname;
-    question->qtype = htons(0x0001);  // 查询类型A
-    question->qclass = htons(0x0001); // 查询类IN
+    question->qtype = htons_new(0x0001);  // 查询类型A
+    question->qclass = htons_new(0x0001); // 查询类IN
 }
 
 int parse_dns_request(const char* request, char* domain) {
@@ -208,7 +212,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
     // 清零并设置服务器地址
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(53); // DNS uses port 53
+    server_addr.sin_port = htons_new(53); // DNS uses port 53
 
     // 将IP地址从点分十进制转换为二进制格式
     if (inet_pton(AF_INET, external_dns_server, &server_addr.sin_addr) <= 0) {
