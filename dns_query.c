@@ -126,6 +126,68 @@ int lookup_domain_in_db(const char* domain, char* ip) {
     return 0;
 }
 
+int send_dns_query(const char* query, size_t query_len, char* response, size_t response_len) {
+    const char* external_dns_server = config_get_external_dns_server();
+    if (!external_dns_server) {
+        fprintf(stderr, "Failed to get external DNS server address from config\n");
+        return -1;
+    }
+
+    // 初始化Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        fprintf(stderr, "WSAStartup failed\n");
+        return -1;
+    }
+
+    // 套接字相关变量
+    SOCKET sockfd;
+    struct sockaddr_in server_addr;
+
+    // 创建UDP套接字
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
+        fprintf(stderr, "Socket creation failed\n");
+        WSACleanup();
+        return -1;
+    }
+
+    // 清零并设置服务器地址
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(53); // DNS uses port 53
+
+    // 将IP地址从点分十进制转换为二进制格式
+    if (inet_pton(AF_INET, external_dns_server, &server_addr.sin_addr) <= 0) {
+        fprintf(stderr, "inet_pton failed\n");
+        closesocket(sockfd);
+        WSACleanup();
+        return -1;
+    }
+
+    // 发送DNS查询请求
+    if (sendto(sockfd, query, query_len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+        fprintf(stderr, "sendto failed\n");
+        closesocket(sockfd);
+        WSACleanup();
+        return -1;
+    }
+
+    // 接收DNS响应
+    struct sockaddr_in from_addr;
+    int from_len = sizeof(from_addr);
+    int n = recvfrom(sockfd, response, response_len, 0, (struct sockaddr*)&from_addr, &from_len);
+    if (n == SOCKET_ERROR) {
+        fprintf(stderr, "recvfrom failed\n");
+        closesocket(sockfd);
+        WSACleanup();
+        return -1;
+    }
+
+    // 关闭套接字
+    closesocket(sockfd);
+    WSACleanup();
+    return n;
+}
 
 void send_dns_response(const char* buffer, const char* ip) {//todo!
     // 发送 DNS 响应（简单模拟）
