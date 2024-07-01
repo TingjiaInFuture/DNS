@@ -14,7 +14,7 @@ static char external_dns_server[16] = "10.3.9.5"; // 默认外部DNS服务器
 void config_load(const char* filename) {
     FILE* file = fopen(filename, "r");
     if (file == NULL) {
-        perror("Failed to open config file");
+        log_error("Failed to open config file");
         exit(EXIT_FAILURE);
     }
 

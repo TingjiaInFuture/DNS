@@ -38,7 +38,7 @@ int parse_dns_request(const char* request, char* domain) {
 int lookup_domain_in_db(const char* domain, char* ip) {
     FILE* file = fopen(dns_db_file, "r");
     if (file == NULL) {
-        perror("Failed to open DNS DB file");
+        log_error("Failed to open DNS DB file");
         log_error("Failed to open DNS DB file: %s", dns_db_file);
         return 0;
     }
@@ -54,8 +54,10 @@ int lookup_domain_in_db(const char* domain, char* ip) {
                 strcpy(ip, file_ip);
                 fclose(file);
                 if (strcmp(ip, "0.0.0.0") == 0) {
+                    log_debug("Domain not found in DB: %s", domain);
                     return -1;  // 域名不存在
                 }
+                log_debug("Found IP for domain %s: %s", domain, ip);
                 return 1;
             }
         }
@@ -97,10 +99,10 @@ void dns_query_handle_request(void* arg) {
         send_dns_response(buffer, ip);  // 发送DNS响应
     }
     else if (lookup_result == -1) {  // 找到IP地址为0.0.0.0，表示域名不存在
-        log_error("Domain not found: %s", domain);
         send_dns_response(buffer, "0.0.0.0"); 
     }
     else {  
+        log_debug("Cache miss for domain %s", domain);
         // 发送外部DNS查询请求
         const char* external_dns_server = config_get_external_dns_server();
         char request_datagram[512];

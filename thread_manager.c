@@ -60,7 +60,7 @@ void thread_manager_init(int n) {
     num_threads = n;
     pool = (thread_pool_t *)malloc(sizeof(thread_pool_t));
     if (!pool) {
-        perror("Failed to allocate memory for thread pool");
+        log_error("Failed to allocate memory for thread pool");
         exit(EXIT_FAILURE);
     }
 
@@ -169,7 +169,7 @@ void thread_manager_init(int n) {
     num_threads = n;
     pool = (thread_pool_t *)malloc(sizeof(thread_pool_t));
     if (!pool) {
-        perror("Failed to allocate memory for thread pool");
+        log_error("Failed to allocate memory for thread pool");
         exit(EXIT_FAILURE);
     }
 

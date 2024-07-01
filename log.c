@@ -11,7 +11,7 @@ static FILE *log_file = NULL;
 void log_init() {
     log_file = fopen("dnsrelay.log", "a");
     if (log_file == NULL) {
-        perror("Failed to open log file");
+        log_error("Failed to open log file");
         log_file = stderr;  // fallback to stderr
     }
 }
@@ -25,10 +25,17 @@ void log_close() {
 void log_debug(const char *format, ...) {
     if (log_file == NULL) return;
 
+    // 获取当前时间并格式化
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    char time_buffer[20]; // 足够存储时间字符串
+    strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", tm_info);
+
     va_list args;
     va_start(args, format);
 
-    fprintf(log_file, "DEBUG: ");
+    // 在日志消息前添加时间戳
+    fprintf(log_file, "%s DEBUG: ", time_buffer);
     vfprintf(log_file, format, args);
     fprintf(log_file, "\n");
 
@@ -38,10 +45,17 @@ void log_debug(const char *format, ...) {
 void log_error(const char *format, ...) {
     if (log_file == NULL) return;
 
+    // 获取当前时间并格式化
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    char time_buffer[20]; // 足够存储时间字符串
+    strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", tm_info);
+
     va_list args;
     va_start(args, format);
 
-    fprintf(log_file, "ERROR: ");
+    // 在日志消息前添加时间戳
+    fprintf(log_file, "%s ERROR: ", time_buffer);
     vfprintf(log_file, format, args);
     fprintf(log_file, "\n");
 
