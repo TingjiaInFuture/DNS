@@ -1,6 +1,6 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
-
+#include "log.h"
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
