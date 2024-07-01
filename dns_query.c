@@ -28,6 +28,44 @@ void dns_query_cleanup() {//todo!
     // 清理资源
 }
 
+// 构建DNS查询报文
+void build_dns_query(const char* domain, char* query) {
+    // 指向当前写入位置的指针
+    char *qname = query + sizeof(DNSHeader);
+    
+    // 初始化报头
+    DNSHeader *header = (DNSHeader *)query;
+    header->id = htons(0x1234);       // 设置事务ID
+    header->flags = htons(0x0100);    // 设置标志位（递归查询）
+    header->qdcount = htons(1);       // 设置问题数为1
+    header->ancount = 0;              // 设置回答数为0
+    header->nscount = 0;              // 设置授权数为0
+    header->arcount = 0;              // 设置附加数为0
+
+    // 构建QNAME部分
+    const char *label_start = domain;
+    const char *label_end;
+    while ((label_end = strchr(label_start, '.')) != NULL) {
+        size_t label_len = label_end - label_start;
+        *qname++ = label_len;
+        memcpy(qname, label_start, label_len);
+        qname += label_len;
+        label_start = label_end + 1;
+    }
+
+    // 添加最后一个标签
+    size_t label_len = strlen(label_start);
+    *qname++ = label_len;
+    memcpy(qname, label_start, label_len);
+    qname += label_len;
+    *qname++ = 0;  // QNAME 以0结尾
+
+    // 设置查询部分
+    DNSQuestion *question = (DNSQuestion *)qname;
+    question->qtype = htons(0x0001);  // 查询类型A
+    question->qclass = htons(0x0001); // 查询类IN
+}
+
 int parse_dns_request(const char* request, char* domain) {
     int offset = 12; // 跳过12字节的报头部分
     int domain_len = 0;

@@ -1,62 +1,83 @@
-// /**
-//  * Alert: This is a test file!
-//  * comment out the main function before running the DNS.
-//  */
+// // /**
+// //  * Alert: This is a test file!
+// //  * comment out the main function before running the DNS.
+// //  */
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "log.h"
+#include <stdint.h>
 
-// 定义函数解析DNS请求并提取域名
-int parse_dns_request(const char* request, char* domain) {
-    int offset = 12; // 跳过12字节的报头部分
-    int domain_len = 0;
+// DNS 报头结构体
+typedef struct {
+    uint16_t id;      // 事务ID
+    uint16_t flags;   // 标志位
+    uint16_t qdcount; // 问题数
+    uint16_t ancount; // 回答数
+    uint16_t nscount; // 授权数
+    uint16_t arcount; // 附加数
+} DNSHeader;
 
-    while (request[offset] != 0) {
-        // 读取当前标签的长度
-        int label_len = request[offset];
-        offset++;
-        
-        // 将当前标签复制到域名缓冲区中
-        for (int i = 0; i < label_len; i++) {
-            domain[domain_len++] = request[offset++];
-        }
+// DNS 问题部分结构体
+typedef struct {
+    uint16_t qtype;   // 查询类型
+    uint16_t qclass;  // 查询类
+} DNSQuestion;
 
-        // 在标签之间添加一个点
-        domain[domain_len++] = '.';
+// 设置16位整数的字节顺序（大端）
+uint16_t htons(uint16_t val) {
+    return (val << 8) | (val >> 8);
+}
+
+// 构建DNS查询报文
+void build_dns_query(const char* domain, char* query) {
+    // 指向当前写入位置的指针
+    char *qname = query + sizeof(DNSHeader);
+    
+    // 初始化报头
+    DNSHeader *header = (DNSHeader *)query;
+    header->id = htons(0x1234);       // 设置事务ID
+    header->flags = htons(0x0100);    // 设置标志位（递归查询）
+    header->qdcount = htons(1);       // 设置问题数为1
+    header->ancount = 0;              // 设置回答数为0
+    header->nscount = 0;              // 设置授权数为0
+    header->arcount = 0;              // 设置附加数为0
+
+    // 构建QNAME部分
+    const char *label_start = domain;
+    const char *label_end;
+    while ((label_end = strchr(label_start, '.')) != NULL) {
+        size_t label_len = label_end - label_start;
+        *qname++ = label_len;
+        memcpy(qname, label_start, label_len);
+        qname += label_len;
+        label_start = label_end + 1;
     }
 
-    // 移除最后一个多余的点并添加字符串结束符
-    if (domain_len > 0) {
-        domain[--domain_len] = '\0';
-    }
+    // 添加最后一个标签
+    size_t label_len = strlen(label_start);
+    *qname++ = label_len;
+    memcpy(qname, label_start, label_len);
+    qname += label_len;
+    *qname++ = 0;  // QNAME 以0结尾
 
-    log_debug("Parsed domain: %s", domain);
-    return 1;
+    // 设置查询部分
+    DNSQuestion *question = (DNSQuestion *)qname;
+    question->qtype = htons(0x0001);  // 查询类型A
+    question->qclass = htons(0x0001); // 查询类IN
 }
 
 // 测试代码
 int main() {
-    // 模拟DNS请求报文
-    char dns_request[] = {
-        0x12, 0x34, // ID
-        0x01, 0x00, // Flags
-        0x00, 0x01, // QDCOUNT
-        0x00, 0x00, // ANCOUNT
-        0x00, 0x00, // NSCOUNT
-        0x00, 0x00, // ARCOUNT
-        0x07, 'e', 'x', 'a', 'm', 'p', 'l', 'e', // QNAME part 1
-        0x03, 'c', 'o', 'm', // QNAME part 2
-        0x00, // QNAME end
-        0x00, 0x01, // QTYPE
-        0x00, 0x01 // QCLASS
-    };
+    char query[256];
+    build_dns_query("example.com", query);
 
-    char domain[256];
-    parse_dns_request(dns_request, domain);
+    printf("DNS Query:\n");
+    for (int i = 0; i < sizeof(DNSHeader) + strlen("example.com") + 2 + sizeof(DNSQuestion); i++) {
+        printf("%02x ", (unsigned char)query[i]);
+    }
+    printf("\n");
 
-    printf("Parsed domain: %s\n", domain);
     return 0;
 }
 
@@ -75,111 +96,183 @@ int main() {
 
 
 
-
-
-
-
-
-
-
-// // main.c (测试用例)
-// //#include "cache.h"
-// //#include <stdio.h>
-// //
-// //int main() {
-// //    cache_init(3);
-// //
-// //    cache_insert("example.com", "1.2.3.4");
-// //    cache_insert("example.org", "2.3.4.5");
-// //    cache_insert("example.net", "3.4.5.6");
-// //
-// //    const char* ip = cache_lookup("example.com");
-// //    if (ip) {
-// //        printf("example.com: %s\n", ip);
-// //    } else {
-// //        printf("example.com not found\n");
-// //    }
-// //
-// //    cache_insert("example.edu", "4.5.6.7");
-// //
-// //    ip = cache_lookup("example.org");
-// //    if (ip) {
-// //        printf("example.org: %s\n", ip);
-// //    } else {
-// //        printf("example.org not found\n");
-// //    }
-// //
-// //    ip = cache_lookup("example.net");
-// //    if (ip) {
-// //        printf("example.net: %s\n", ip);
-// //    } else {
-// //        printf("example.net not found\n");
-// //    }
-// //
-// //    ip = cache_lookup("example.edu");
-// //    if (ip) {
-// //        printf("example.edu: %s\n", ip);
-// //    } else {
-// //        printf("example.edu not found\n");
-// //    }
-// //
-// //    cache_free();
-// //    system("pause");
-// //    return 0;
-// //}
-
-//  //// main.c (测试用例)
-//  //#include "log.h"
-//  //int main() {
-//  //    log_init();
-//  //    log_debug("This is a debug message.");
-//  //    log_error("This is an error message.");
-//  //    log_close();
-//  //    return 0;
-//  //}
-// // main.c (测试用例)
-// #include "dns_query.h"
-// #include "cache.h"
-// #include "config.h"
 // #include <stdio.h>
 // #include <string.h>
+// #include <stdlib.h>
+// #include "log.h"
 
+// // 定义函数解析DNS请求并提取域名
+// int parse_dns_request(const char* request, char* domain) {
+//     int offset = 12; // 跳过12字节的报头部分
+//     int domain_len = 0;
+
+//     while (request[offset] != 0) {
+//         // 读取当前标签的长度
+//         int label_len = request[offset];
+//         offset++;
+        
+//         // 将当前标签复制到域名缓冲区中
+//         for (int i = 0; i < label_len; i++) {
+//             domain[domain_len++] = request[offset++];
+//         }
+
+//         // 在标签之间添加一个点
+//         domain[domain_len++] = '.';
+//     }
+
+//     // 移除最后一个多余的点并添加字符串结束符
+//     if (domain_len > 0) {
+//         domain[--domain_len] = '\0';
+//     }
+
+//     log_debug("Parsed domain: %s", domain);
+//     return 1;
+// }
+
+// // 测试代码
 // int main() {
-//     // 初始化缓存
-//     cache_init(3);
+//     // 模拟DNS请求报文
+//     char dns_request[] = {
+//         0x12, 0x34, // ID
+//         0x01, 0x00, // Flags
+//         0x00, 0x01, // QDCOUNT
+//         0x00, 0x00, // ANCOUNT
+//         0x00, 0x00, // NSCOUNT
+//         0x00, 0x00, // ARCOUNT
+//         0x07, 'e', 'x', 'a', 'm', 'p', 'l', 'e', // QNAME part 1
+//         0x03, 'c', 'o', 'm', // QNAME part 2
+//         0x00, // QNAME end
+//         0x00, 0x01, // QTYPE
+//         0x00, 0x01 // QCLASS
+//     };
 
-//     // 向缓存中插入几个域名和IP地址的映射
-//     cache_insert("example", "1.2.3.4");
-//     cache_insert("example.org", "2.3.4.5");
-//     cache_insert("example.net", "3.4.5.6");
+//     char domain[256];
+//     parse_dns_request(dns_request, domain);
 
-//     // 初始化DNS查询处理器
-//     dns_query_init("config.txt");
-
-//     // 测试查找缓存
-//     const char* ip = cache_lookup("example");
-//     if (ip) {
-//         printf("Cache hit for example.com: %s\n", ip);
-//     }
-//     else {
-//         printf("Cache miss for example.com\n");
-//     }
-
-//     // 测试查找数据库
-//     char db_ip[16];
-//     if (lookup_domain_in_db("example.com", db_ip)) {
-//         printf("DB hit for example.com: %s\n", db_ip);
-//     }
-//     else {
-//         printf("DB miss for example.com\n");
-//     }
-
-//     // 测试发送请求
-//     dns_query_handle_request();
-
-//     // 清理资源
-//     dns_query_cleanup();
-//     cache_free();
-//     system("pause");
+//     printf("Parsed domain: %s\n", domain);
 //     return 0;
 // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// // // main.c (测试用例)
+// // //#include "cache.h"
+// // //#include <stdio.h>
+// // //
+// // //int main() {
+// // //    cache_init(3);
+// // //
+// // //    cache_insert("example.com", "1.2.3.4");
+// // //    cache_insert("example.org", "2.3.4.5");
+// // //    cache_insert("example.net", "3.4.5.6");
+// // //
+// // //    const char* ip = cache_lookup("example.com");
+// // //    if (ip) {
+// // //        printf("example.com: %s\n", ip);
+// // //    } else {
+// // //        printf("example.com not found\n");
+// // //    }
+// // //
+// // //    cache_insert("example.edu", "4.5.6.7");
+// // //
+// // //    ip = cache_lookup("example.org");
+// // //    if (ip) {
+// // //        printf("example.org: %s\n", ip);
+// // //    } else {
+// // //        printf("example.org not found\n");
+// // //    }
+// // //
+// // //    ip = cache_lookup("example.net");
+// // //    if (ip) {
+// // //        printf("example.net: %s\n", ip);
+// // //    } else {
+// // //        printf("example.net not found\n");
+// // //    }
+// // //
+// // //    ip = cache_lookup("example.edu");
+// // //    if (ip) {
+// // //        printf("example.edu: %s\n", ip);
+// // //    } else {
+// // //        printf("example.edu not found\n");
+// // //    }
+// // //
+// // //    cache_free();
+// // //    system("pause");
+// // //    return 0;
+// // //}
+
+// //  //// main.c (测试用例)
+// //  //#include "log.h"
+// //  //int main() {
+// //  //    log_init();
+// //  //    log_debug("This is a debug message.");
+// //  //    log_error("This is an error message.");
+// //  //    log_close();
+// //  //    return 0;
+// //  //}
+// // // main.c (测试用例)
+// // #include "dns_query.h"
+// // #include "cache.h"
+// // #include "config.h"
+// // #include <stdio.h>
+// // #include <string.h>
+
+// // int main() {
+// //     // 初始化缓存
+// //     cache_init(3);
+
+// //     // 向缓存中插入几个域名和IP地址的映射
+// //     cache_insert("example", "1.2.3.4");
+// //     cache_insert("example.org", "2.3.4.5");
+// //     cache_insert("example.net", "3.4.5.6");
+
+// //     // 初始化DNS查询处理器
+// //     dns_query_init("config.txt");
+
+// //     // 测试查找缓存
+// //     const char* ip = cache_lookup("example");
+// //     if (ip) {
+// //         printf("Cache hit for example.com: %s\n", ip);
+// //     }
+// //     else {
+// //         printf("Cache miss for example.com\n");
+// //     }
+
+// //     // 测试查找数据库
+// //     char db_ip[16];
+// //     if (lookup_domain_in_db("example.com", db_ip)) {
+// //         printf("DB hit for example.com: %s\n", db_ip);
+// //     }
+// //     else {
+// //         printf("DB miss for example.com\n");
+// //     }
+
+// //     // 测试发送请求
+// //     dns_query_handle_request();
+
+// //     // 清理资源
+// //     dns_query_cleanup();
+// //     cache_free();
+// //     system("pause");
+// //     return 0;
+// // }
