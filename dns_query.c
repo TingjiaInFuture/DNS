@@ -35,10 +35,10 @@ void dns_query_cleanup() {//todo!
 // 构建DNS查询报文
 void build_dns_query(const char* domain, char* query) {
     // 指向当前写入位置的指针
-    char *qname = query + sizeof(DNSHeader);
-    
+    char* qname = query + sizeof(DNSHeader);
+
     // 初始化报头
-    DNSHeader *header = (DNSHeader *)query;
+    DNSHeader* header = (DNSHeader*)query;
     header->id = htons_new(0x1234);       // 设置事务ID
     header->flags = htons_new(0x0100);    // 设置标志位（递归查询）
     header->qdcount = htons_new(1);       // 设置问题数为1
@@ -47,8 +47,8 @@ void build_dns_query(const char* domain, char* query) {
     header->arcount = 0;              // 设置附加数为0
 
     // 构建QNAME部分
-    const char *label_start = domain;
-    const char *label_end;
+    const char* label_start = domain;
+    const char* label_end;
     while ((label_end = strchr(label_start, '.')) != NULL) {
         size_t label_len = label_end - label_start;
         *qname++ = label_len;
@@ -65,7 +65,7 @@ void build_dns_query(const char* domain, char* query) {
     *qname++ = 0;  // QNAME 以0结尾
 
     // 设置查询部分
-    DNSQuestion *question = (DNSQuestion *)qname;
+    DNSQuestion* question = (DNSQuestion*)qname;
     question->qtype = htons_new(0x0001);  // 查询类型A
     question->qclass = htons_new(0x0001); // 查询类IN
 }
@@ -73,12 +73,17 @@ void build_dns_query(const char* domain, char* query) {
 int parse_dns_request(const char* request, char* domain) {
     int offset = 12; // 跳过12字节的报头部分
     int domain_len = 0;
+    int max_domain_len = 255; // 确保不超过缓冲区大小
 
     while (request[offset] != 0) {
         // 读取当前标签的长度
         int label_len = request[offset];
+        if (label_len + domain_len + 1 >= max_domain_len) {
+            // 防止越界
+            return 0;
+        }
         offset++;
-        
+
         // 将当前标签复制到域名缓冲区中
         for (int i = 0; i < label_len; i++) {
             domain[domain_len++] = request[offset++];
@@ -96,14 +101,15 @@ int parse_dns_request(const char* request, char* domain) {
     log_debug("Parsed domain: %s", domain);
     return 1;
 }
+
 // 解析DNS响应
 int parse_dns_respond(const char* respond, char* ip) {
     // 解析报头
-    DNSHeader *header = (DNSHeader *)respond;
+    DNSHeader* header = (DNSHeader*)respond;
     uint16_t ancount = ntohs(header->ancount);
 
     // 跳过报头和问题部分
-    const char *ptr = respond + sizeof(DNSHeader);
+    const char* ptr = respond + sizeof(DNSHeader);
 
     // 跳过QNAME
     while (*ptr != 0) {
@@ -119,7 +125,8 @@ int parse_dns_respond(const char* respond, char* ip) {
         // 跳过NAME
         if ((*ptr & 0xC0) == 0xC0) {
             ptr += 2; // 压缩域名
-        } else {
+        }
+        else {
             while (*ptr != 0) {
                 ptr += *ptr + 1;
             }
@@ -127,20 +134,20 @@ int parse_dns_respond(const char* respond, char* ip) {
         }
 
         // 解析TYPE和CLASS
-        uint16_t type = ntohs(*(uint16_t *)ptr);
-        uint16_t class = ntohs(*(uint16_t *)(ptr + 2));
+        uint16_t type = ntohs(*(uint16_t*)ptr);
+        uint16_t class = ntohs(*(uint16_t*)(ptr + 2));
         ptr += 4;
 
         // 跳过TTL
         ptr += 4;
 
         // 解析RDLENGTH
-        uint16_t rdlength = ntohs(*(uint16_t *)ptr);
+        uint16_t rdlength = ntohs(*(uint16_t*)ptr);
         ptr += 2;
 
         // 解析RDATA
         if (type == 1 && class == 1 && rdlength == 4) { // A记录
-            sprintf(ip, "%u.%u.%u.%u", (unsigned char)ptr[0], (unsigned char)ptr[1], (unsigned char)ptr[2], (unsigned char)ptr[3]);
+            snprintf(ip, 16, "%u.%u.%u.%u", (unsigned char)ptr[0], (unsigned char)ptr[1], (unsigned char)ptr[2], (unsigned char)ptr[3]);
             return 1;
         }
 
@@ -150,6 +157,7 @@ int parse_dns_respond(const char* respond, char* ip) {
 
     return 0; // 没有找到A记录
 }
+
 
 int lookup_domain_in_db(const char* domain, char* ip) {
     FILE* file = fopen(dns_db_file, "r");
@@ -198,6 +206,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
+    // 套接字相关变量
     SOCKET sockfd;
     struct sockaddr_in server_addr;
 
@@ -208,10 +217,12 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
+    // 清零并设置服务器地址
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons_new(53); // DNS uses port 53
 
+    // 将IP地址从点分十进制转换为二进制格式
     if (inet_pton(AF_INET, external_dns_server, &server_addr.sin_addr) <= 0) {
         fprintf(stderr, "inet_pton failed\n");
         closesocket(sockfd);
@@ -227,30 +238,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
-    // 设置超时处理
-    fd_set readfds;
-    struct timeval timeout;
-
-    FD_ZERO(&readfds);
-    FD_SET(sockfd, &readfds);
-
-    timeout.tv_sec = 2000 / 1000; // 2秒
-    timeout.tv_usec = (2000 % 1000) * 1000;
-
-    int result = select(0, &readfds, NULL, NULL, &timeout);
-    if (result == SOCKET_ERROR) {
-        log_debug("select() failed");
-        closesocket(sockfd);
-        WSACleanup();
-        return -1;
-    }
-    else if (result == 0) {
-        log_debug("receive_dns_response timed out");
-        closesocket(sockfd);
-        WSACleanup();
-        return -1;
-    }
-
+    // 接收DNS响应
     struct sockaddr_in from_addr;
     int from_len = sizeof(from_addr);
     int n = recvfrom(sockfd, response, response_len, 0, (struct sockaddr*)&from_addr, &from_len);
@@ -261,24 +249,84 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
+    // 关闭套接字
     closesocket(sockfd);
     WSACleanup();
     return n;
 }
 
+void send_dns_response(SOCKET s, const char* buffer, const char* ip, const struct sockaddr_in* clientAddr, int clientAddrLen) {
+    DNSHeader* responseHeader = (DNSHeader*)buffer;
+    char* ptr = buffer + sizeof(DNSHeader);
+    // 如果 IP 地址为 0.0.0.0，表示域名不存在
+    if (strcmp(ip, "0.0.0.0") == 0) {
+        responseHeader->ancount = htons_new(0); // No answers
+        responseHeader->flags |= htons_new(0x0003); // NXDOMAIN: Non-Existent Domain
+    }
+    else {
+        responseHeader->ancount = htons_new(1); // One answer
 
-void send_dns_response(const char* buffer, const char* ip) {//todo!
-    // 发送 DNS 响应（简单模拟）
-    log_debug("Sending DNS response: %s -> %s", buffer, ip);
-    printf("Domain: %s, IP: %s\n", buffer, ip);
+
+
+        while (*ptr != 0) {
+            ptr += *ptr + 1;
+        }
+        ptr += 1 + sizeof(DNSQuestion); // 跳过 QNAME, QTYPE and QCLASS
+
+
+        *ptr++ = 0xC0;
+        *ptr++ = 0x0C;
+
+        // Type A
+        *(uint16_t*)ptr = htons_new(0x0001);
+        ptr += 2;
+        // Class IN
+        *(uint16_t*)ptr = htons_new(0x0001);
+        ptr += 2;
+        // TTL
+        *(uint32_t*)ptr = htonl(300);
+        ptr += 4;
+        // RDLENGTH
+        *(uint16_t*)ptr = htons_new(4);
+        ptr += 2;
+        // RDATA
+
+
+        sscanf(ip, "%hhu.%hhu.%hhu.%hhu", (unsigned char*)ptr, (unsigned char*)(ptr + 1), (unsigned char*)(ptr + 2), (unsigned char*)(ptr + 3));
+        ptr += 4;
+    }
+
+    int responseLen = ptr - buffer;
+
+    // 发送回应
+    log_debug("Sending DNS response to client: %s, length: %d", ip, responseLen);
+    int send_result = sendto(s, buffer, responseLen, 0, (struct sockaddr*)clientAddr, clientAddrLen);
+    if (send_result == SOCKET_ERROR) {
+        log_error("sendto failed with error: %d", WSAGetLastError());
+    }
+    else {
+        log_debug("DNS response sent successfully");
+    }
 }
 
 void dns_query_handle_request(void* arg) {
-    char* buffer = (char*)arg;  // 从参数获取DNS请求数据
+    struct request_data {
+        SOCKET sock;
+        char buffer[512];
+        struct sockaddr_in clientAddr;
+        int clientAddrLen;
+    };
+
+    struct request_data* data = (struct request_data*)arg;
+    char* buffer = data->buffer;
+    SOCKET sock = data->sock;
+    struct sockaddr_in clientAddr = data->clientAddr;
+    int clientAddrLen = data->clientAddrLen;
     char domain[256];
+
     if (!parse_dns_request(buffer, domain)) {  // 解析DNS请求，提取域名
         log_error("Failed to parse DNS request");
-        free(buffer);  // 解析失败，释放内存
+        free(data);  // 解析失败，释放内存
         return;
     }
 
@@ -286,20 +334,20 @@ void dns_query_handle_request(void* arg) {
     const char* cached_ip = cache_lookup(domain);
     if (cached_ip) {
         log_debug("Cache hit for domain %s", domain);
-        send_dns_response(buffer, cached_ip);
-        free(buffer);
+        send_dns_response(sock, buffer, cached_ip, &clientAddr, clientAddrLen);
+        free(data);
         return;
     }
 
     int lookup_result = lookup_domain_in_db(domain, ip);  // 在本地数据库中查找域名对应的IP地址
     if (lookup_result == 1) {  // 找到普通IP地址
         cache_insert(domain, ip);  // 将结果插入缓存
-        send_dns_response(buffer, ip);  // 发送DNS响应
+        send_dns_response(sock, buffer, ip, &clientAddr, clientAddrLen);  // 发送DNS响应
     }
     else if (lookup_result == -1) {  // 找到IP地址为0.0.0.0，表示域名不存在
-        send_dns_response(buffer, "0.0.0.0"); 
+        send_dns_response(sock, buffer, "0.0.0.0", &clientAddr, clientAddrLen);
     }
-    else {  
+    else {
         log_debug("Cache miss for domain %s", domain);
         build_dns_query(domain, buffer);  // 构建DNS查询报文
         int query_len = sizeof(DNSHeader) + strlen(domain) + 2 + sizeof(DNSQuestion);
@@ -307,19 +355,19 @@ void dns_query_handle_request(void* arg) {
         int response_len = send_dns_query(buffer, query_len, response, sizeof(response));  // 发送DNS查询并接收响应
         if (response_len == -1) {
             log_error("Failed to send DNS query");
-            free(buffer);
+            free(data);
             return;
         }
-        
+
         if (parse_dns_respond(response, ip)) {  // 解析DNS响应
             cache_insert(domain, ip);  // 将结果插入缓存
-            send_dns_response(buffer, ip);  // 发送DNS响应
-        } else {
+            send_dns_response(sock, buffer, ip, &clientAddr, clientAddrLen);  // 发送DNS响应
+        }
+        else {
             log_error("Failed to parse DNS response");
         }
-
-
     }
 
-    free(buffer); 
+    free(data);
 }
+

@@ -1,6 +1,8 @@
 #ifndef DNS_QUERY_H
 #define DNS_QUERY_H
 #include <stdint.h>
+#include <WinSock2.h>
+#pragma comment (lib, "ws2_32.lib")
 // DNS 报头结构体
 typedef struct {
     uint16_t id;      // 事务ID
@@ -27,7 +29,7 @@ int parse_dns_request(const char* request, char* domain);
 int parse_dns_respond(const char* respond, char* ip);
 int lookup_domain_in_db(const char* domain, char* ip);
 int send_dns_query(const char* query, size_t query_len, char* response, size_t response_len);
-void send_dns_response(const char* buffer, const char* ip);
+void send_dns_response(SOCKET s, const char* buffer, const char* ip, const struct sockaddr_in* clientAddr, int clientAddrLen);
 void dns_query_handle_request(void* arg);
 
 #endif // DNS_QUERY_H
