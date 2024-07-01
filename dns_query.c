@@ -198,7 +198,6 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
-    // 套接字相关变量
     SOCKET sockfd;
     struct sockaddr_in server_addr;
 
@@ -209,12 +208,10 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
-    // 清零并设置服务器地址
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons_new(53); // DNS uses port 53
 
-    // 将IP地址从点分十进制转换为二进制格式
     if (inet_pton(AF_INET, external_dns_server, &server_addr.sin_addr) <= 0) {
         fprintf(stderr, "inet_pton failed\n");
         closesocket(sockfd);
@@ -230,7 +227,30 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
-    // 接收DNS响应
+    // 设置超时处理
+    fd_set readfds;
+    struct timeval timeout;
+
+    FD_ZERO(&readfds);
+    FD_SET(sockfd, &readfds);
+
+    timeout.tv_sec = 2000 / 1000; // 2秒
+    timeout.tv_usec = (2000 % 1000) * 1000;
+
+    int result = select(0, &readfds, NULL, NULL, &timeout);
+    if (result == SOCKET_ERROR) {
+        log_debug("select() failed");
+        closesocket(sockfd);
+        WSACleanup();
+        return -1;
+    }
+    else if (result == 0) {
+        log_debug("receive_dns_response timed out");
+        closesocket(sockfd);
+        WSACleanup();
+        return -1;
+    }
+
     struct sockaddr_in from_addr;
     int from_len = sizeof(from_addr);
     int n = recvfrom(sockfd, response, response_len, 0, (struct sockaddr*)&from_addr, &from_len);
@@ -241,11 +261,11 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
-    // 关闭套接字
     closesocket(sockfd);
     WSACleanup();
     return n;
 }
+
 
 void send_dns_response(const char* buffer, const char* ip) {//todo!
     // 发送 DNS 响应（简单模拟）
