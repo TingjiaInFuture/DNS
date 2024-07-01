@@ -27,8 +27,8 @@ SOCKET create_udp_socket() {
     struct sockaddr_in servaddr;
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(0);  // °ó¶¨µ½Ò»¸öËæ»úµÄ¶Ë¿Ú
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);  // °ó¶¨µ½ËùÓĞ¿ÉÓÃµÄ½Ó¿Ú
+    servaddr.sin_port = htons(0);  // ç»‘å®šåˆ°ä¸€ä¸ªéšæœºçš„ç«¯å£
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);  // ç»‘å®šåˆ°æ‰€æœ‰å¯ç”¨çš„æ¥å£
 
     if (bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) == SOCKET_ERROR) {
         log_error("Failed to bind socket");
@@ -48,7 +48,7 @@ struct sockaddr_in create_server_address(const char* ip, int port) {
     return servaddr;
 }
 
-// ¹¹ÔìDNSÇëÇó±¨ÎÄ
+// æ„é€ DNSè¯·æ±‚æŠ¥æ–‡
 void build_dns_query(const char* domain, char* query, int* query_len) {
     dns_header_t header = { htons(12345), htons(0x0100), htons(1), 0, 0, 0 };
     memcpy(query, &header, sizeof(header));
@@ -93,16 +93,16 @@ int send_dns_query(SOCKET sockfd, const struct sockaddr_in* servaddr, const char
 //    }
 //    return 1;
 //}
-// ½âÎöDNSÏìÓ¦±¨ÎÄ
+// è§£æDNSå“åº”æŠ¥æ–‡
 int receive_dns_response(SOCKET sockfd, struct in_addr* response_ip) {
-    //Ôö¼Ó³¬Ê±´¦Àí
+    //å¢åŠ è¶…æ—¶å¤„ç†
     fd_set readfds;
     struct timeval timeout;
 
     FD_ZERO(&readfds);
     FD_SET(sockfd, &readfds);
 
-    timeout.tv_sec = 2000 / 1000;//2Ãë
+    timeout.tv_sec = 2000 / 1000;//2ç§’
     timeout.tv_usec = (2000 % 1000) * 1000;
 
     int result = select(0, &readfds, NULL, NULL, &timeout);
@@ -121,12 +121,12 @@ int receive_dns_response(SOCKET sockfd, struct in_addr* response_ip) {
         log_error("Failed to receive response");
         return 0;
     }
-    response[numbytes] = '\0';  // Ìí¼Ónull×Ö·û
+    response[numbytes] = '\0';  // æ·»åŠ nullå­—ç¬¦
 
-    // Ìø¹ıDNSÏìÓ¦±¨ÎÄµÄÍ·²¿ºÍÎÊÌâ²¿·Ö
+    // è·³è¿‡DNSå“åº”æŠ¥æ–‡çš„å¤´éƒ¨å’Œé—®é¢˜éƒ¨åˆ†
     char* p = response + sizeof(dns_header_t) + strlen(response + sizeof(dns_header_t)) + 1 + sizeof(dns_question_t);
 
-    // ½âÎöµÚÒ»¸ö×ÊÔ´¼ÇÂ¼
+    // è§£æç¬¬ä¸€ä¸ªèµ„æºè®°å½•
     dns_resource_record_t rr;
     rr.name = p;
     p += strlen(p) + 1;
@@ -140,7 +140,7 @@ int receive_dns_response(SOCKET sockfd, struct in_addr* response_ip) {
     p += 2;
     rr.rdata = p;
 
-    // Èç¹û×ÊÔ´¼ÇÂ¼µÄÀàĞÍÊÇA¼ÇÂ¼£¬ÄÇÃ´×ÊÔ´Êı¾İ¾ÍÊÇIPµØÖ·
+    // å¦‚æœèµ„æºè®°å½•çš„ç±»å‹æ˜¯Aè®°å½•ï¼Œé‚£ä¹ˆèµ„æºæ•°æ®å°±æ˜¯IPåœ°å€
     if (rr.type == 1) {
         memcpy(response_ip, rr.rdata, sizeof(*response_ip));
     }
