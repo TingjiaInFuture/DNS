@@ -24,13 +24,33 @@ void dns_query_init(const char* config_file) {
     log_debug("DNS DB file: %s", dns_db_file);
 }
 
-void dns_query_cleanup() {
+void dns_query_cleanup() {//todo!
     // 清理资源
 }
 
 int parse_dns_request(const char* request, char* domain) {
-    // 解析 DNS 请求（简单模拟）
-    strcpy(domain, request);
+    int offset = 12; // 跳过12字节的报头部分
+    int domain_len = 0;
+
+    while (request[offset] != 0) {
+        // 读取当前标签的长度
+        int label_len = request[offset];
+        offset++;
+        
+        // 将当前标签复制到域名缓冲区中
+        for (int i = 0; i < label_len; i++) {
+            domain[domain_len++] = request[offset++];
+        }
+
+        // 在标签之间添加一个点
+        domain[domain_len++] = '.';
+    }
+
+    // 移除最后一个多余的点并添加字符串结束符
+    if (domain_len > 0) {
+        domain[--domain_len] = '\0';
+    }
+
     log_debug("Parsed domain: %s", domain);
     return 1;
 }
@@ -69,7 +89,7 @@ int lookup_domain_in_db(const char* domain, char* ip) {
 }
 
 
-void send_dns_response(const char* buffer, const char* ip) {
+void send_dns_response(const char* buffer, const char* ip) {//todo!
     // 发送 DNS 响应（简单模拟）
     log_debug("Sending DNS response: %s -> %s", buffer, ip);
     printf("Domain: %s, IP: %s\n", buffer, ip);
