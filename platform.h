@@ -16,7 +16,7 @@ extern void socket_cleanup();
 #define SOCKET int
 #define SOCKET_ERROR -1
 #define INVALID_SOCKET -1
-#define socket_init() (0) // 在 Linux 上，这个宏为空
+#define socket_init() (1) // 在 Linux 上，这个宏为空
 #define socket_cleanup()
 #endif
 
