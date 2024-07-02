@@ -7,53 +7,50 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+
 
 int main(int argc, char* argv[]) {
-    //读入参数
     char* debugOption = NULL;
-    char* filePath = NULL;
+    char* dnsServer = NULL;
+    char* filePath = "config.txt"; // 默认配置文件
+    int detailedDebug = 0;
+    int basicDebug = 0;
 
     if (argc > 1) {
-        if (argv[1][0] == '-') {
-            debugOption = argv[1];
+        debugOption = argv[1];
+        if (argc > 2) {
+            dnsServer = argv[2];
+            if (argc > 3) {
+                filePath = argv[3];
+            }
         }
-        else {
-            filePath = argv[1];
-        }
-    }
-
-    if (argc > 2) {
-        filePath = argv[2];
     }
 
     if (debugOption != NULL) {
         if (strcmp(debugOption, "-d") == 0) {
             printf("choose -d option.\n");
+            basicDebug = 1;
         }
         else if (strcmp(debugOption, "-dd") == 0) {
             printf("choose -dd option.\n");
+            detailedDebug = 1;
         }
         else {
             printf("Invalid option: %s\n", debugOption);
             return 1;
         }
     }
-    else {
-        printf("No options.\n");
-    }
+
+    printf("Using DNS server: %s\n", dnsServer ? dnsServer : config_get_external_dns_server());
+    printf("Config file: %s\n", filePath);
+
     // 加载配置文件
-    if (filePath != NULL) {
-        printf("Config file: %s\n", filePath);
-        config_load(filePath);
-    }
-    else {
-        printf("Using default config file.\n");
-        config_load("config.txt");
-    }
+    config_load(filePath);
+
     // 初始化日志
     log_init();
-
-
 
     // 初始化缓存
     int cache_size = config_get_cache_size();
@@ -69,7 +66,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    dns_query_init("config.txt");
+    dns_query_init(filePath);
 
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) {
@@ -92,6 +89,10 @@ int main(int argc, char* argv[]) {
     }
 
     log_debug("Server started on port %d", config_get_server_port());
+    if (detailedDebug == 1) {
+        console_log_detail("Server started on port %d", config_get_server_port());
+    }
+    int sequence_number = 0;
 
     while (1) {
         char* buffer = (char*)malloc(sizeof(SOCKET) + 512);
@@ -105,7 +106,25 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        log_debug("Received request from client");
+        char client_ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(clientAddr.sin_addr), client_ip, INET_ADDRSTRLEN);
+
+        char query_domain[256];
+        if (!parse_dns_request(buffer + sizeof(SOCKET), query_domain, detailedDebug)) {
+            log_error("Failed to parse DNS request");
+            free(buffer);
+            continue;
+        }
+
+        log_debug("Received request from client %s for domain %s", client_ip, query_domain);
+
+        if (detailedDebug) {
+            console_log_detail("Received request from client %s for domain %s", client_ip, query_domain);
+        }
+        else if (basicDebug) {
+            console_log_basic(client_ip, query_domain, sequence_number);
+        }
+        sequence_number++;
 
         memcpy(buffer, &sock, sizeof(SOCKET));
 
@@ -123,13 +142,14 @@ int main(int argc, char* argv[]) {
         data->clientAddrLen = clientAddrLen;
         free(buffer);
 
-        thread_manager_add_task(dns_query_handle_request, data);
+        thread_manager_add_task(dns_query_handle_request, data, detailedDebug);
     }
-
 
     closesocket(sock);
     socket_cleanup();
     dns_query_cleanup();
     thread_manager_destroy();
     log_close();
+
+    return 0;
 }
