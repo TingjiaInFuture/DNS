@@ -255,7 +255,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
     return n;
 }
 
-void send_dns_response(SOCKET s, const char* buffer, const char* ip, const struct sockaddr_in* clientAddr, int clientAddrLen) {
+void send_dns_response(SOCKET s, char* buffer, const char* ip, const struct sockaddr_in* clientAddr, int clientAddrLen) {
     DNSHeader* responseHeader = (DNSHeader*)buffer;
     char* ptr = buffer + sizeof(DNSHeader);
     // 如果 IP 地址为 0.0.0.0，表示域名不存在
