@@ -1,7 +1,8 @@
 #include "platform.h"
+
+#ifdef _WIN32
 unsigned socket_init() {
     WSADATA wsaData;
-    // 初始化 Winsock
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         log_error("WSAStartup failed");
         return 0;
@@ -10,6 +11,6 @@ unsigned socket_init() {
 }
 
 void socket_cleanup() {
-    // 清理 Winsock
     WSACleanup();
 }
+#endif

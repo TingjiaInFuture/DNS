@@ -5,9 +5,8 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment (lib, "ws2_32.lib")
-unsigned socket_init();
-
-void socket_cleanup();
+extern unsigned socket_init();
+extern void socket_cleanup();
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
