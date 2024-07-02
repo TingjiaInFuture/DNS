@@ -1,7 +1,7 @@
 #ifndef DNS_QUERY_H
 #define DNS_QUERY_H
 #include <stdint.h>
-
+#include <stddef.h>
 // DNS 报头结构体
 typedef struct {
     uint16_t id;      // 事务ID

@@ -1,5 +1,5 @@
-编译命令：gcc -o dns *.c -lws2_32
-
+Windows 编译命令：gcc -o dns *.c -lws2_32
+Linux 编译命令：gcc -o dns *.c -lpthread
 ### 1. 程序总体结构
 
 - **主程序 (main.c)**: 负责程序的初始化、加载配置文件、启动多线程服务器。
