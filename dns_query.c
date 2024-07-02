@@ -199,10 +199,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
-    // 初始化Winsock
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        fprintf(stderr, "WSAStartup failed\n");
+    if(!socket_init()) {
         return -1;
     }
 
@@ -213,7 +210,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
     // 创建UDP套接字
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
         fprintf(stderr, "Socket creation failed\n");
-        WSACleanup();
+        socket_cleanup();
         return -1;
     }
 
@@ -226,7 +223,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
     if (inet_pton(AF_INET, external_dns_server, &server_addr.sin_addr) <= 0) {
         fprintf(stderr, "inet_pton failed\n");
         closesocket(sockfd);
-        WSACleanup();
+        socket_cleanup();
         return -1;
     }
 
@@ -234,7 +231,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
     if (sendto(sockfd, query, query_len, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
         fprintf(stderr, "sendto failed\n");
         closesocket(sockfd);
-        WSACleanup();
+        socket_cleanup();
         return -1;
     }
 
@@ -245,13 +242,13 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
     if (n == SOCKET_ERROR) {
         fprintf(stderr, "recvfrom failed\n");
         closesocket(sockfd);
-        WSACleanup();
+        socket_cleanup();
         return -1;
     }
 
     // 关闭套接字
     closesocket(sockfd);
-    WSACleanup();
+    socket_cleanup();
     return n;
 }
 
@@ -302,7 +299,7 @@ void send_dns_response(SOCKET s, char* buffer, const char* ip, const struct sock
     log_debug("Sending DNS response to client: %s, length: %d", ip, responseLen);
     int send_result = sendto(s, buffer, responseLen, 0, (struct sockaddr*)clientAddr, clientAddrLen);
     if (send_result == SOCKET_ERROR) {
-        log_error("sendto failed with error: %d", WSAGetLastError());
+        log_error("sendto client failed");
     }
     else {
         log_debug("DNS response sent successfully");
