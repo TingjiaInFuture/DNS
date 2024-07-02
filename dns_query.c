@@ -70,7 +70,7 @@ void build_dns_query(const char* domain, char* query) {
     question->qclass = htons_new(0x0001); // 查询类IN
 }
 
-int parse_dns_request(const char* request, char* domain) {
+int parse_dns_request(const char* request, char* domain, int detailedDebug) {
     int offset = 12; // 跳过12字节的报头部分
     int domain_len = 0;
     int max_domain_len = 255; // 确保不超过缓冲区大小
@@ -99,6 +99,9 @@ int parse_dns_request(const char* request, char* domain) {
     }
 
     log_debug("Parsed domain: %s", domain);
+    if (detailedDebug == 1) {
+        console_log_detail("Parsed domain: %s", domain);
+    }
     return 1;
 }
 
@@ -159,7 +162,7 @@ int parse_dns_respond(const char* respond, char* ip) {
 }
 
 
-int lookup_domain_in_db(const char* domain, char* ip) {
+int lookup_domain_in_db(const char* domain, char* ip, int detailedDebug) {
     FILE* file = fopen(dns_db_file, "r");
     if (file == NULL) {
         log_error("Failed to open DNS DB file");
@@ -172,16 +175,28 @@ int lookup_domain_in_db(const char* domain, char* ip) {
         char file_domain[256];
         char file_ip[16];
         log_debug("Read line: %s", line);
+        if (detailedDebug == 1) {
+            console_log_detail("Read line: %s", line);
+        }
         if (sscanf(line, "%255s %15s", file_domain, file_ip) == 2) {
             log_debug("Parsed domain: %s, IP: %s", file_domain, file_ip);
+            if (detailedDebug == 1) {
+                console_log_detail("Parsed domain: %s, IP: %s", file_domain, file_ip);
+            }
             if (strcmp(domain, file_domain) == 0) {
                 strcpy(ip, file_ip);
                 fclose(file);
                 if (strcmp(ip, "0.0.0.0") == 0) {
                     log_debug("Domain not found in DB: %s", domain);
+                    if (detailedDebug == 1) {
+                        console_log_detail("Domain not found in DB: %s", domain);
+                    }
                     return -1;  // 域名不存在
                 }
                 log_debug("Found IP for domain %s: %s", domain, ip);
+                if (detailedDebug == 1) {
+                    console_log_detail("Found IP for domain %s: %s", domain, ip);
+                }
                 return 1;
             }
         }
@@ -199,7 +214,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
         return -1;
     }
 
-    if(!socket_init()) {
+    if (!socket_init()) {
         return -1;
     }
 
@@ -252,7 +267,7 @@ int send_dns_query(const char* query, size_t query_len, char* response, size_t r
     return n;
 }
 
-void send_dns_response(SOCKET s, char* buffer, const char* ip, const struct sockaddr_in* clientAddr, int clientAddrLen) {
+void send_dns_response(SOCKET s, char* buffer, const char* ip, const struct sockaddr_in* clientAddr, int clientAddrLen, int detailedDebug) {
     DNSHeader* responseHeader = (DNSHeader*)buffer;
     char* ptr = buffer + sizeof(DNSHeader);
     // 如果 IP 地址为 0.0.0.0，表示域名不存在
@@ -297,16 +312,22 @@ void send_dns_response(SOCKET s, char* buffer, const char* ip, const struct sock
 
     // 发送回应
     log_debug("Sending DNS response to client: %s, length: %d", ip, responseLen);
+    if (detailedDebug == 1) {
+        console_log_detail("Sending DNS response to client: %s, length: %d", ip, responseLen);
+    }
     int send_result = sendto(s, buffer, responseLen, 0, (struct sockaddr*)clientAddr, clientAddrLen);
     if (send_result == SOCKET_ERROR) {
         log_error("sendto client failed");
     }
     else {
         log_debug("DNS response sent successfully");
+        if (detailedDebug == 1) {
+            console_log_detail("DNS response sent successfully");
+        }
     }
 }
 
-void dns_query_handle_request(void* arg) {
+void dns_query_handle_request(void* arg, int detailedDebug) {
     struct request_data {
         SOCKET sock;
         char buffer[512];
@@ -321,8 +342,11 @@ void dns_query_handle_request(void* arg) {
     int clientAddrLen = data->clientAddrLen;
     char domain[256];
 
-    if (!parse_dns_request(buffer, domain)) {  // 解析DNS请求，提取域名
+    if (!parse_dns_request(buffer, domain, detailedDebug)) {  // 解析DNS请求，提取域名
         log_error("Failed to parse DNS request");
+        if (detailedDebug == 1) {
+            console_log_detail("Failed to parse DNS request");
+        }
         free(data);  // 解析失败，释放内存
         return;
     }
@@ -331,37 +355,49 @@ void dns_query_handle_request(void* arg) {
     const char* cached_ip = cache_lookup(domain);
     if (cached_ip) {
         log_debug("Cache hit for domain %s", domain);
-        send_dns_response(sock, buffer, cached_ip, &clientAddr, clientAddrLen);
+        if (detailedDebug == 1) {
+            console_log_detail("Cache hit for domain %s", domain);
+        }
+        send_dns_response(sock, buffer, cached_ip, &clientAddr, clientAddrLen, detailedDebug);
         free(data);
         return;
     }
 
-    int lookup_result = lookup_domain_in_db(domain, ip);  // 在本地数据库中查找域名对应的IP地址
+    int lookup_result = lookup_domain_in_db(domain, ip, detailedDebug);  // 在本地数据库中查找域名对应的IP地址
     if (lookup_result == 1) {  // 找到普通IP地址
         cache_insert(domain, ip);  // 将结果插入缓存
-        send_dns_response(sock, buffer, ip, &clientAddr, clientAddrLen);  // 发送DNS响应
+        send_dns_response(sock, buffer, ip, &clientAddr, clientAddrLen, detailedDebug);  // 发送DNS响应
     }
     else if (lookup_result == -1) {  // 找到IP地址为0.0.0.0，表示域名不存在
-        send_dns_response(sock, buffer, "0.0.0.0", &clientAddr, clientAddrLen);
+        send_dns_response(sock, buffer, "0.0.0.0", &clientAddr, clientAddrLen, detailedDebug);
     }
     else {
         log_debug("Cache miss for domain %s", domain);
+        if (detailedDebug == 1) {
+            console_log_detail("Cache miss for domain %s", domain);
+        }
         build_dns_query(domain, buffer);  // 构建DNS查询报文
         int query_len = sizeof(DNSHeader) + strlen(domain) + 2 + sizeof(DNSQuestion);
         char response[512];
         int response_len = send_dns_query(buffer, query_len, response, sizeof(response));  // 发送DNS查询并接收响应
         if (response_len == -1) {
             log_error("Failed to send DNS query");
+            if (detailedDebug == 1) {
+                console_log_detail("Failed to send DNS query");
+            }
             free(data);
             return;
         }
 
         if (parse_dns_respond(response, ip)) {  // 解析DNS响应
             cache_insert(domain, ip);  // 将结果插入缓存
-            send_dns_response(sock, buffer, ip, &clientAddr, clientAddrLen);  // 发送DNS响应
+            send_dns_response(sock, buffer, ip, &clientAddr, clientAddrLen, detailedDebug);  // 发送DNS响应
         }
         else {
             log_error("Failed to parse DNS response");
+            if (detailedDebug == 1) {
+                console_log_detail("Failed to parse DNS response");
+            }
         }
     }
 

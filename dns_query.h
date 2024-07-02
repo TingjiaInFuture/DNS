@@ -1,7 +1,7 @@
 #ifndef DNS_QUERY_H
 #define DNS_QUERY_H
 #include <stdint.h>
-#include <stddef.h>
+
 // DNS 报头结构体
 typedef struct {
     uint16_t id;      // 事务ID
@@ -24,11 +24,11 @@ uint16_t htons_new(uint16_t val);
 void dns_query_init(const char* config_file);
 void dns_query_cleanup();
 void build_dns_query(const char* domain, char* query);
-int parse_dns_request(const char* request, char* domain);
+int parse_dns_request(const char* request, char* domain, int detailedDebug);
 int parse_dns_respond(const char* respond, char* ip);
-int lookup_domain_in_db(const char* domain, char* ip);
+int lookup_domain_in_db(const char* domain, char* ip, int detailedDebug);
 int send_dns_query(const char* query, size_t query_len, char* response, size_t response_len);
 
-void dns_query_handle_request(void* arg);
+void dns_query_handle_request(void* arg, int detailedDebug);
 
 #endif // DNS_QUERY_H

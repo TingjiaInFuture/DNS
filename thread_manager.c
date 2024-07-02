@@ -6,8 +6,9 @@
 
 #ifdef _WIN32
 typedef struct {
-    void (*function)(void *);
+    void (*function)(void *, int);
     void *arg;
+    int detailedDebug;
 } task_t;
 
 typedef struct {
@@ -47,7 +48,7 @@ DWORD WINAPI worker_thread(LPVOID arg) {
             }
 
             ReleaseMutex(pool->mutex);
-            task.function(task.arg);
+            task.function(task.arg, task.detailedDebug);
         } else {
             ReleaseMutex(pool->mutex);
         }
@@ -99,11 +100,12 @@ void thread_manager_destroy() {
     free(pool);
 }
 
-void thread_manager_add_task(void (*task_function)(void *), void *arg) {
+void thread_manager_add_task(void (*task_function)(void *, int), void *arg, int detailedDebug) {
     WaitForSingleObject(pool->mutex, INFINITE);
 
     pool->task_queue[pool->queue_rear].function = task_function;
     pool->task_queue[pool->queue_rear].arg = arg;
+    pool->task_queue[pool->queue_rear].detailedDebug = detailedDebug;
     pool->queue_rear = (pool->queue_rear + 1) % pool->queue_size;
     pool->task_count++;
 
@@ -116,8 +118,9 @@ void thread_manager_add_task(void (*task_function)(void *), void *arg) {
 #include <pthread.h>
 
 typedef struct {
-    void (*function)(void *);
-    void *arg;
+    void (*function)(void*, int);
+    void* arg;
+    int detailedDebug;
 } task_t;
 
 typedef struct {
@@ -135,7 +138,7 @@ typedef struct {
 static thread_pool_t *pool = NULL;
 static int num_threads;
 
-void *worker_thread(void *arg) {
+void* worker_thread(void* arg) {
     while (1) {
         pthread_mutex_lock(&pool->mutex);
 
@@ -156,8 +159,9 @@ void *worker_thread(void *arg) {
             pthread_cond_signal(&pool->cond);
             pthread_mutex_unlock(&pool->mutex);
 
-            task.function(task.arg);
-        } else {
+            task.function(task.arg, task.detailedDebug);  // 传递两个参数
+        }
+        else {
             pthread_mutex_unlock(&pool->mutex);
         }
     }
@@ -207,11 +211,12 @@ void thread_manager_destroy() {
     free(pool);
 }
 
-void thread_manager_add_task(void (*task_function)(void *), void *arg) {
+void thread_manager_add_task(void (*task_function)(void*, int), void* arg, int detailedDebug) {
     pthread_mutex_lock(&pool->mutex);
 
     pool->task_queue[pool->queue_rear].function = task_function;
     pool->task_queue[pool->queue_rear].arg = arg;
+    pool->task_queue[pool->queue_rear].detailedDebug = detailedDebug;  // 存储第二个参数
     pool->queue_rear = (pool->queue_rear + 1) % pool->queue_size;
     pool->task_count++;
 
