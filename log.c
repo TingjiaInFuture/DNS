@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
-
+#include <string.h>
 static FILE* log_file = NULL;
 
 void log_init() {
